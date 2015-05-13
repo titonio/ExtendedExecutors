@@ -1,5 +1,7 @@
 package com.titonio.concurrent;
 
+import com.google.common.base.Function;
+import com.google.common.util.concurrent.*;
 import org.junit.Test;
 import org.slf4j.MDC;
 
@@ -35,7 +37,10 @@ public class ExtendedExecutorsTest {
         return new Runnable() {
             public void run() {
                 assertEquals(value, MDC.get(key));
-                endLatch.countDown();
+                if (endLatch != null) {
+                    endLatch.countDown();
+                }
+
             }
         };
     }
@@ -56,6 +61,36 @@ public class ExtendedExecutorsTest {
         extendedExecutor.submit(createTask(key, "value2", endLatch));
 
         assertTrue(endLatch.await(10, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testMDCDecoratorListeningExecutorService() throws Exception {
+
+        ExecutorService executor = Executors.newFixedThreadPool(1);
+
+//        final ListeningExecutorService extendedExecutor = ExtendedExecutors.MDCDecorator(MoreExecutors.listeningDecorator(executor));
+        final ListeningExecutorService extendedExecutor = MoreExecutors.listeningDecorator(ExtendedExecutors.MDCDecorator(executor));
+
+        final String value = "value";
+        final String key = "key";
+
+        MDC.put(key, value);
+        ListenableFuture<String> result = extendedExecutor.submit(Executors.callable(createTask(key, value, null), "result"));
+        ListenableFuture<String> transform = Futures.transform(result, new Function<String, String>() {
+            public String apply(String input) {
+                assertEquals(value, MDC.get(key));
+                return input;
+            }
+        }, extendedExecutor);
+
+        ListenableFuture<String> transform2 = Futures.transform(transform, new AsyncFunction<String, String>() {
+            public ListenableFuture<String> apply(String input) throws Exception {
+                return extendedExecutor.submit(Executors.callable(createTask("key", "value", null), input));
+            }
+        });
+
+
+        assertEquals("result", transform2.get(10, TimeUnit.SECONDS));
     }
 
 

@@ -1,5 +1,7 @@
 package com.titonio.concurrent;
 
+import com.google.common.util.concurrent.AbstractListeningExecutorService;
+import com.google.common.util.concurrent.ListeningExecutorService;
 import org.slf4j.MDC;
 
 import java.util.List;
@@ -24,13 +26,16 @@ public class ExtendedExecutors {
 
 
     public static Executor MDCDecorator(Executor executor) {
-        return new MDCExecutor(executor);
+        return executor instanceof MDCExecutor ? executor : new MDCExecutor(executor);
     }
 
     public static ExecutorService MDCDecorator(ExecutorService executor) {
-        return new MDCExecutorService(executor);
+        return executor instanceof MDCExecutorService ? executor : new MDCExecutorService(executor);
     }
 
+    public static ListeningExecutorService MDCDecorator(ListeningExecutorService executor) {
+        return executor instanceof MDCListeningExecutorService ? executor : new MDCListeningExecutorService(executor);
+    }
 
     private static class MDCExecutor implements Executor {
 
@@ -84,6 +89,39 @@ public class ExtendedExecutors {
         private final ExecutorService delegate;
 
         public MDCExecutorService(ExecutorService delegate) {
+            this.delegate = delegate;
+        }
+
+        public void execute(Runnable command) {
+            delegate.execute(new MDCRunnable(checkNotNull(command), MDC.getCopyOfContextMap()));
+        }
+
+        public void shutdown() {
+            delegate.shutdown();
+        }
+
+        public List<Runnable> shutdownNow() {
+            return delegate.shutdownNow();
+        }
+
+        public boolean isShutdown() {
+            return delegate.isShutdown();
+        }
+
+        public boolean isTerminated() {
+            return delegate.isTerminated();
+        }
+
+        public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
+            return delegate.awaitTermination(timeout, unit);
+        }
+    }
+
+    private static class MDCListeningExecutorService extends AbstractListeningExecutorService {
+
+        private final ExecutorService delegate;
+
+        public MDCListeningExecutorService(ListeningExecutorService delegate) {
             this.delegate = delegate;
         }
 
